@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description:
+  CloudFormation template for CloudGuruChallenge Amazon ElasticCache
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/24
+      EnableDnsSupport: 'true'
+      EnableDnsHostNames: 'true'
+      Tags:
+        - Key: Name
+          Value: Challenge VPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Internet Gateway
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayID: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  SubnetPublic:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.0.0.0/28
+      Tags:
+        - Key: Name
+          Value: Public Subnet
+
+  SubnetDB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.0.0.16/28
+      Tags:
+        - Key: Name
+          Value: Database Subnet
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcID: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Public Route Table
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: "ChallengeDB"
+      DBName: "{{resolve:ssm:/elasticache_challenge/db_name:1}}"
+      AllocatedStorage: '5'
+      DBInstanceClass: db.t2.micro
+      Engine: postgres
+      MasterUsername: "{{resolve:ssm:/elasticache_challenge/master_username:1}}"
+      MasterUserPassword: "{{resolve:ssm-secure:/elasticache_challenge/master_password:1}}"
+      Tags:
+        - Key: Name
+          Value: Challenge Database
